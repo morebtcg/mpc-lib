@@ -235,5 +235,7 @@ CheckOptions:
     value:           'false'
   - key:             readability-identifier-length.IgnoredVariableNames
     value:           'it|ar|i|j|k|e|id|ss|os|tx|db|to'
+  - key:             readability-identifier-length.IgnoredParameterNames
+    value:           'id'
 ...
 
