@@ -2,15 +2,15 @@
 #include "Concepts.h"
 
 namespace ppc::mpc::network {
-constexpr inline struct SendAll {
-    auto operator()(auto& network, BytesConstView buffer, auto&&... args) const -> int {
-        return tag_invoke(*this, network, buffer, std::forward<decltype(args)>(args)...);
+constexpr inline struct SendMessage {
+    void operator()(auto& network, PlayerID playerID, BytesConstView buffer, auto&&... args) const {
+        return tag_invoke(*this, network, playerID, buffer, std::forward<decltype(args)>(args)...);
     }
-} sendAll;
+} sendMessage{};
 
-constexpr inline struct ReceiveAll {
-    auto operator()(auto& network, BytesConstView buffer, auto&&... args) const -> int {
-        return tag_invoke(*this, network, buffer, std::forward<decltype(args)>(args)...);
+constexpr inline struct ReceiveMessage {
+    auto operator()(auto& network, PlayerID playerID, auto&&... args) const {
+        return tag_invoke(*this, network, playerID, std::forward<decltype(args)>(args)...);
     }
-} receiveAll;
+} receiveMessage{};
 }  // namespace ppc::mpc::network
