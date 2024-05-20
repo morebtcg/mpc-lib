@@ -1,0 +1,28 @@
+{
+  "name": "mpc-lib",
+  "version-string": "1.0.0",
+  "homepage": "https://github.com/morebtcg/mpc-lib",
+  "description": "mpc-lib",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    },
+    {
+      "name": "openssl",
+      "version>=": "1.1.1n#1"
+    },
+    "libuuid"
+  ],
+  "builtin-baseline": "7eb700c9688daed6d8bdcdc571ebe3eedea6a774",
+  "overrides": [
+    {
+      "name": "openssl",
+      "version": "1.1.1n#1"
+    }
+  ]
+}
