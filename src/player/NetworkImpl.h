@@ -3,6 +3,9 @@
 #include "player/Network.h"
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
+#include <boost/serialization/map.hpp>
+#include <boost/serialization/string.hpp>
+#include <boost/serialization/vector.hpp>
 #include <iterator>
 #include <sstream>
 #include <type_traits>
@@ -20,14 +23,14 @@ inline void broadcastMessage(network::Network auto& network, int playerID, Bytes
 template <class Object>
 inline void broadcastMessage(network::Network auto& network, int playerID, const Object& object, int totalPlayers) {
     if constexpr (std::is_trivial_v<Object> && std::is_standard_layout_v<Object>) {
-        BytesConstView bufferView{reinterpret_cast<const std::byte*>(std::addressof(object)), sizeof(object)};
+        BytesConstView bufferView{reinterpret_cast<const uint8_t*>(std::addressof(object)), sizeof(object)};
         broadcastMessage(network, playerID, bufferView, totalPlayers);
     } else {
         std::stringbuf buffer;
         boost::archive::binary_oarchive archive(buffer);
         archive << object;
         auto view = buffer.view();
-        BytesConstView bufferView = {reinterpret_cast<const std::byte*>(view.data()), view.size()};
+        BytesConstView bufferView = {reinterpret_cast<const uint8_t*>(view.data()), view.size()};
         broadcastMessage(network, playerID, bufferView, totalPlayers);
     }
 }
@@ -38,7 +41,7 @@ inline void receiveAllMessage(network::Network auto& network, int playerID, auto
         for (int i = 0; i < totalPlayers; ++i) {
             if (i != playerID) {
                 auto& object = container[i];
-                BytesView buffer(reinterpret_cast<std::byte*>(std::addressof(object)), sizeof(object));
+                BytesView buffer(reinterpret_cast<uint8_t*>(std::addressof(object)), sizeof(object));
                 network::receiveMessage(network, i, buffer.begin());
             }
         }

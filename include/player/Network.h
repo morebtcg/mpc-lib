@@ -5,13 +5,13 @@
 
 namespace ppc::mpc::network {
 constexpr inline struct SendMessage {
-    void operator()(auto& network, PlayerID playerID, BytesConstView buffer, auto&&... args) const {
-        return tag_invoke(*this, network, playerID, buffer, std::forward<decltype(args)>(args)...);
+    void operator()(auto& network, PlayerID playerID, std::ranges::input_range auto&& buffer, auto&&... args) const {
+        return tag_invoke(*this, network, playerID, std::forward<decltype(buffer)>(buffer), std::forward<decltype(args)>(args)...);
     }
 } sendMessage{};
 
 constexpr inline struct ReceiveMessage {
-    auto operator()(auto& network, PlayerID playerID, std::output_iterator<std::byte> auto&& outputIterator, auto&&... args) const {
+    auto operator()(auto& network, PlayerID playerID, auto&& outputIterator, auto&&... args) const {
         return tag_invoke(*this, network, playerID, std::forward<decltype(outputIterator)>(outputIterator), std::forward<decltype(args)>(args)...);
     }
 } receiveMessage{};

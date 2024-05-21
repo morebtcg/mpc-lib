@@ -13,10 +13,10 @@ BOOST_FIXTURE_TEST_SUITE(TestCreateSecret, TestCreateSecretFixture)
 
 struct MockNetwork {
     friend void tag_invoke(ppc::mpc::tag_t<ppc::mpc::network::sendMessage> /*unused*/, MockNetwork& network, ppc::mpc::PlayerID playerID,
-        ppc::mpc::BytesConstView buffer, auto&&... args) {}
+        std::ranges::input_range auto&& buffer, auto&&... args) {}
 
     friend void tag_invoke(ppc::mpc::tag_t<ppc::mpc::network::receiveMessage> /*unused*/, MockNetwork& network, ppc::mpc::PlayerID playerID,
-        std::output_iterator<std::byte> auto&& outputIterator, auto&&... args) {}
+        auto&& outputIterator, auto&&... args) {}
 };
 
 static_assert(std::output_iterator<std::byte*, std::byte>);

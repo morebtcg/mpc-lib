@@ -2,6 +2,7 @@
 
 #include "NetworkImpl.h"
 #include "PlayerImpl.h"
+#include "Serialization.h"
 #include "cosigner/cmp_key_persistency.h"
 #include "cosigner/cmp_setup_service.h"
 #include "cosigner/platform_service.h"
@@ -155,12 +156,12 @@ std::tuple<PrivateKeySlice, PublicKey> tag_invoke(
     if (publicKeyStr.size() != sizeof(publicKey)) {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unmatch public key size!"));
     }
-    std::uninitialized_copy(publicKeyStr.begin(), publicKeyStr.end(), std::addressof(publicKey));
+    std::uninitialized_copy(publicKeyStr.begin(), publicKeyStr.end(), publicKey.data());
 
     elliptic_curve256_scalar_t privateKeyScalar;
     cosigner_sign_algorithm privateKeyAlgorithm;
     persistency.load_key(keyID, privateKeyAlgorithm, privateKeyScalar);
-    std::uninitialized_copy(privateKeyScalar, privateKeyScalar + sizeof(privateKeyScalar), std::addressof(privateKeySlice));
+    std::uninitialized_copy(privateKeyScalar, privateKeyScalar + sizeof(privateKeyScalar), privateKeySlice.data());
 
     return result;
 }
