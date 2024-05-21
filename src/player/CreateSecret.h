@@ -95,17 +95,6 @@ public:
     std::map<std::string, std::map<uint64_t, fireblocks::common::cosigner::commitment>> m_commitments;
 };
 
-struct EllipticCurveAlgebraContext {
-    EllipticCurveAlgebraContext(const EllipticCurveAlgebraContext&) = delete;
-    EllipticCurveAlgebraContext(EllipticCurveAlgebraContext&&) noexcept = delete;
-    EllipticCurveAlgebraContext& operator=(const EllipticCurveAlgebraContext&) = delete;
-    EllipticCurveAlgebraContext& operator=(EllipticCurveAlgebraContext&&) noexcept = delete;
-    EllipticCurveAlgebraContext(AlgorithmType type) : m_algebra(toEllipticCurveAlgebra(type)) {}
-    ~EllipticCurveAlgebraContext() noexcept { elliptic_curve256_algebra_ctx_free(std::addressof(m_algebra)); }
-
-    elliptic_curve256_algebra_ctx_t m_algebra;
-};
-
 std::tuple<PrivateKeySlice, PublicKey> tag_invoke(
     tag_t<createSecret> /*unused*/, PlayerImpl& player, network::Network auto& network, KeyID keyID, auto&&... args) {
     std::tuple<PrivateKeySlice, PublicKey> result;
@@ -115,8 +104,14 @@ std::tuple<PrivateKeySlice, PublicKey> tag_invoke(
     auto totalPlayers = players(player);
     auto algorithmType = toMPCAlgorithm(algorithm(player));
 
-    EllipticCurveAlgebraContext algebra(algorithm(player));
+    std::unique_ptr<elliptic_curve256_algebra_ctx_t,
+        decltype([](elliptic_curve256_algebra_ctx_t* algebra) { elliptic_curve256_algebra_ctx_free(algebra); })>
+        algebra(toEllipticCurveAlgebra(algorithm(player)));
     std::vector<uint64_t> playersIDs;
+    playersIDs.reserve(totalPlayers);
+    for (int i = 0; i < totalPlayers; ++i) {
+        playersIDs.push_back(i);
+    }
 
     PlatformImpl platform(playerID);
     PersistencyImpl persistency;
@@ -150,7 +145,7 @@ std::tuple<PrivateKeySlice, PublicKey> tag_invoke(
     broadcastMessage(network, playerID, paillierProof, totalPlayers);
     receiveAllMessage(network, playerID, paillier_large_factor_proofs, totalPlayers);
 
-    // Step5:
+    // Last: create secret
     std::string publicKeyStr;
     setupService.create_secret(keyID, paillier_large_factor_proofs, publicKeyStr, algorithmType);
     if (publicKeyStr.size() != sizeof(publicKey)) {

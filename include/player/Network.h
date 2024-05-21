@@ -17,8 +17,8 @@ constexpr inline struct ReceiveMessage {
 } receiveMessage{};
 
 template <class NetworkType>
-concept Network = requires(NetworkType& network, std::vector<std::byte> buffer) {
+concept Network = requires(NetworkType& network, std::vector<uint8_t> buffer) {
     { sendMessage(network, 0, BytesConstView{}) } -> std::same_as<void>;
-    // { receiveMessage(network, 0, std::back_inserter(buffer)) } -> std::same_as<void>;
+    { receiveMessage(network, 0, std::back_inserter(buffer)) } -> std::same_as<void>;
 };
 }  // namespace ppc::mpc::network
