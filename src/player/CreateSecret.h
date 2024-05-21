@@ -2,6 +2,11 @@
 
 #include "NetworkImpl.h"
 #include "PlayerImpl.h"
+#include "cosigner/cmp_key_persistency.h"
+#include "cosigner/cmp_setup_service.h"
+#include "cosigner/platform_service.h"
+#include "cosigner/sign_algorithm.h"
+#include "crypto/elliptic_curve_algebra/elliptic_curve256_algebra.h"
 #include "player/Concepts.h"
 #include "player/Network.h"
 #include "player/Player.h"

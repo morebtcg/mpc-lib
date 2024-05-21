@@ -19,7 +19,8 @@
     "libuuid",
     "secp256k1",
     "boost-exception",
-    "boost-serialization"
+    "boost-serialization",
+    "boost-test"
   ],
   "builtin-baseline": "7eb700c9688daed6d8bdcdc571ebe3eedea6a774",
   "overrides": [
