@@ -1,5 +1,7 @@
 #pragma once
 #include "Concepts.h"
+#include <iterator>
+#include <vector>
 
 namespace ppc::mpc::network {
 constexpr inline struct SendMessage {
@@ -15,8 +17,8 @@ constexpr inline struct ReceiveMessage {
 } receiveMessage{};
 
 template <class NetworkType>
-concept Network = requires(NetworkType& network) {
-    { SendMessage(network, 0, BytesConstView{}) } -> std::same_as<void>;
-    { ReceiveMessage(network, 0) } -> std::same_as<void>;
+concept Network = requires(NetworkType& network, std::vector<std::byte> buffer) {
+    { sendMessage(network, 0, BytesConstView{}) } -> std::same_as<void>;
+    // { receiveMessage(network, 0, std::back_inserter(buffer)) } -> std::same_as<void>;
 };
 }  // namespace ppc::mpc::network

@@ -1,5 +1,3 @@
-#pragma once
-
 #include "CreateSecret.h"
 #include "cosigner/cosigner_exception.h"
 #include <chrono>

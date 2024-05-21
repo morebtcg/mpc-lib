@@ -19,13 +19,13 @@ constexpr inline struct Algorithm {
 } algorithm{};
 
 constexpr inline struct CreateSecret {
-    std::tuple<PrivateKeySlice, PublicKey> operator()(auto& player, network::Network auto& network, BytesConstView keyID, auto&&... args) const {
+    std::tuple<PrivateKeySlice, PublicKey> operator()(auto& player, network::Network auto& network, KeyID keyID, auto&&... args) const {
         return tag_invoke(*this, player, network, keyID, std::forward<decltype(args)>(args)...);
     }
 } createSecret{};
 
 constexpr inline struct Sign {
-    auto operator()(auto& player, network::Network auto& network, BytesConstView keyID, auto&&... args) const -> int {
+    auto operator()(auto& player, network::Network auto& network, KeyID keyID, auto&&... args) const -> int {
         return tag_invoke(*this, player, network, keyID, std::forward<decltype(args)>(args)...);
     }
 } sign{};
