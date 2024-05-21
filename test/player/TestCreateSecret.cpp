@@ -9,6 +9,7 @@
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <deque>
+#include <functional>
 #include <mutex>
 #include <thread>
 
@@ -16,21 +17,29 @@ class TestCreateSecretFixture {};
 
 BOOST_FIXTURE_TEST_SUITE(TestCreateSecret, TestCreateSecretFixture)
 
+struct Router {
+    std::mutex m_messageMutex;
+    std::map<std::tuple<ppc::mpc::PlayerID, ppc::mpc::PlayerID>, std::deque<std::vector<uint8_t>>> m_messages;
+};
+
 struct MockNetwork {
-    friend void tag_invoke(ppc::mpc::tag_t<ppc::mpc::network::sendMessage> /*unused*/, MockNetwork& network, ppc::mpc::PlayerID playerID,
+    std::reference_wrapper<Router> m_router;
+    int m_playerID;
+
+    friend void tag_invoke(ppc::mpc::tag_t<ppc::mpc::network::sendMessage> /*unused*/, MockNetwork& network, ppc::mpc::PlayerID toPlayerID,
         std::ranges::input_range auto&& buffer, auto&&... args) {
-        std::unique_lock lock(network.m_messageMutex);
+        std::unique_lock lock(network.m_router.get().m_messageMutex);
         std::vector<uint8_t> message(buffer.begin(), buffer.end());
 
-        std::cout << "Send to: " << playerID << " player, buffer size:" << message.size() << "\n";
-        network.m_messages[playerID].push_back(std::move(message));
+        std::cout << "Send message: " << network.m_playerID << "->" << toPlayerID << ", buffer size:" << message.size() << "\n";
+        network.m_router.get().m_messages[{network.m_playerID, toPlayerID}].push_back(std::move(message));
     }
 
-    friend void tag_invoke(ppc::mpc::tag_t<ppc::mpc::network::receiveMessage> /*unused*/, MockNetwork& network, ppc::mpc::PlayerID playerID,
+    friend void tag_invoke(ppc::mpc::tag_t<ppc::mpc::network::receiveMessage> /*unused*/, MockNetwork& network, ppc::mpc::PlayerID fromPlayerID,
         auto&& outputIterator, auto&&... args) {
         while (true) {
-            std::unique_lock lock(network.m_messageMutex);
-            auto& queue = network.m_messages[playerID];
+            std::unique_lock lock(network.m_router.get().m_messageMutex);
+            auto& queue = network.m_router.get().m_messages[{fromPlayerID, network.m_playerID}];
             if (queue.empty()) {
                 lock.unlock();
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -38,16 +47,13 @@ struct MockNetwork {
             }
 
             auto& message = queue.front();
-            std::cout << "Receive from: " << playerID << " player, buffer size:" << message.size() << "\n";
+            std::cout << "Receive message: " << fromPlayerID << "->" << network.m_playerID << ", buffer size:" << message.size() << "\n";
 
             std::copy(message.begin(), message.end(), outputIterator);
             queue.pop_front();
             return;
         }
     }
-
-    std::mutex m_messageMutex;
-    std::map<ppc::mpc::PlayerID, std::deque<std::vector<uint8_t>>> m_messages;
 };
 
 BOOST_AUTO_TEST_CASE(serialize) {
@@ -92,7 +98,10 @@ BOOST_AUTO_TEST_CASE(create) {
     ppc::mpc::player::PlayerImpl player2(1, ppc::mpc::ECDSA_SECP256K1, 3);
     ppc::mpc::player::PlayerImpl player3(2, ppc::mpc::ECDSA_SECP256K1, 3);
 
-    MockNetwork mockNetwork;
+    Router router;
+    MockNetwork mockNetwork1{.m_router = router, .m_playerID = 0};
+    MockNetwork mockNetwork2{.m_router = router, .m_playerID = 1};
+    MockNetwork mockNetwork3{.m_router = router, .m_playerID = 2};
     std::string keyID{"MyID"};
 
     ppc::mpc::PrivateKeySlice slice1{};
@@ -102,16 +111,16 @@ BOOST_AUTO_TEST_CASE(create) {
     ppc::mpc::PublicKey publicKey2{};
     ppc::mpc::PublicKey publicKey3{};
 
-    std::thread thread1(catchError(1, [&]() { std::tie(slice1, publicKey1) = ppc::mpc::player::createSecret(player1, mockNetwork, keyID); }));
-    std::thread thread2(catchError(2, [&]() { std::tie(slice2, publicKey2) = ppc::mpc::player::createSecret(player2, mockNetwork, keyID); }));
-    std::thread thread3(catchError(3, [&]() { std::tie(slice3, publicKey3) = ppc::mpc::player::createSecret(player3, mockNetwork, keyID); }));
+    std::thread thread1(catchError(1, [&]() { std::tie(slice1, publicKey1) = ppc::mpc::player::createSecret(player1, mockNetwork1, keyID); }));
+    std::thread thread2(catchError(2, [&]() { std::tie(slice2, publicKey2) = ppc::mpc::player::createSecret(player2, mockNetwork2, keyID); }));
+    std::thread thread3(catchError(3, [&]() { std::tie(slice3, publicKey3) = ppc::mpc::player::createSecret(player3, mockNetwork3, keyID); }));
 
     thread1.join();
     thread2.join();
     thread3.join();
 
-    // BOOST_CHECK_NE(slice1, slice2);
-    // BOOST_CHECK_NE(slice2, slice3);
+    BOOST_CHECK_NE(slice1, slice2);
+    BOOST_CHECK_NE(slice2, slice3);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
