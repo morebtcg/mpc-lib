@@ -10,6 +10,8 @@ if(NOT TARGET OpenSSL::Crypto)
     find_package(OpenSSL 1.1.1 REQUIRED)
 endif()
 
+find_package(boost_exception CONFIG REQUIRED)
+find_package(boost_serialization CONFIG REQUIRED)
 add_subdirectory(src/common)
 
 if(${CMAKE_SOURCE_DIR} STREQUAL ${PROJECT_SOURCE_DIR} AND NOT MPC_LIB_SKIP_TESTS)

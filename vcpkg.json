@@ -17,7 +17,9 @@
       "version>=": "1.1.1n#1"
     },
     "libuuid",
-    "secp256k1"
+    "secp256k1",
+    "boost-exception",
+    "boost-serialization"
   ],
   "builtin-baseline": "7eb700c9688daed6d8bdcdc571ebe3eedea6a774",
   "overrides": [
