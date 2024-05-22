@@ -1,6 +1,7 @@
 #include "CreateSecret.h"
 #include "Dump.h"
 #include "PlayerImpl.h"
+#include "Sign.h"
 #include "player/Concepts.h"
 #include "player/Network.h"
 #include "player/Player.h"
@@ -9,7 +10,6 @@
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
-#include <cstddef>
 #include <deque>
 #include <functional>
 #include <mutex>
@@ -95,25 +95,25 @@ auto catchError(int num, auto lambda) {
     };
 }
 
-std::vector<std::tuple<ppc::mpc::PrivateKeySlice, ppc::mpc::PublicKey>> testCreate(int count) {
-    std::string keyID{"MyID"};
+constexpr static std::string keyID{"MyID"};
 
+std::vector<std::tuple<ppc::mpc::PrivateKeySlice, ppc::mpc::PublicKey>> testCreate(int count) {
     std::vector<ppc::mpc::player::PlayerImpl> players;
     players.reserve(count);
 
     Router router;
     std::vector<MockNetwork> networks;
     networks.reserve(count);
-    std::vector<std::tuple<ppc::mpc::PrivateKeySlice, ppc::mpc::PublicKey>> results(count);
 
     std::vector<std::thread> threads;
     threads.reserve(count);
 
+    std::vector<std::tuple<ppc::mpc::PrivateKeySlice, ppc::mpc::PublicKey>> results(count);
     for (auto i = 0; i < count; ++i) {
         players.emplace_back(i, ppc::mpc::ECDSA_SECP256K1, count);
         networks.emplace_back(MockNetwork{.m_router = router, .m_playerID = i});
-        threads.emplace_back(catchError(
-            i, [i, &results, &players, &networks, &keyID]() { results[i] = ppc::mpc::player::createSecret(players[i], networks[i], keyID); }));
+        threads.emplace_back(
+            catchError(i, [i, &results, &players, &networks]() { results[i] = ppc::mpc::player::createSecret(players[i], networks[i], keyID); }));
     }
 
     for (auto i = 0; i < count; ++i) {
@@ -123,6 +123,30 @@ std::vector<std::tuple<ppc::mpc::PrivateKeySlice, ppc::mpc::PublicKey>> testCrea
     return results;
 }
 
+std::vector<ppc::mpc::Signature> testSign(int count, ppc::mpc::BytesConstView signData) {
+    auto keys = testCreate(count);
+
+    std::vector<ppc::mpc::player::PlayerImpl> players;
+    players.reserve(count);
+    Router router;
+    std::vector<MockNetwork> networks;
+    networks.reserve(count);
+    std::vector<std::thread> threads;
+    threads.reserve(count);
+
+    constexpr static ppc::mpc::RequestID requestID{"requestID!"};
+    std::vector<ppc::mpc::Signature> signatures(count);
+    for (auto i = 0; i < count; ++i) {
+        players.emplace_back(i, ppc::mpc::ECDSA_SECP256K1, count);
+        networks.emplace_back(MockNetwork{.m_router = router, .m_playerID = i});
+        threads.emplace_back(catchError(i, [i, &keys, &players, &networks, &signData, &signatures]() {
+            signatures[i] = ppc::mpc::player::sign(players[i], networks[i], keyID, signData, requestID, std::get<0>(keys[i]));
+        }));
+    }
+
+    return signatures;
+}
+
 BOOST_AUTO_TEST_CASE(create) {
     for (auto i = 3; i < 10; ++i) {
         auto results = testCreate(i);
@@ -130,6 +154,13 @@ BOOST_AUTO_TEST_CASE(create) {
         for (auto& [privateKeySlice, publicKey] : results) {
             BOOST_CHECK_EQUAL(expectPublicKey, publicKey);
         }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(sign) {
+    for (auto i = 3; i < 10; ++i) {
+        auto signData = "To be sign! " + std::to_string(i);
+        auto results = testSign(i, ppc::mpc::BytesConstView((const uint8_t*)signData.data(), signData.size()));
     }
 }
 

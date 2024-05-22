@@ -15,7 +15,7 @@
 namespace ppc::mpc::player {
 
 Signature tag_invoke(tag_t<sign> /*unused*/, auto& player, network::Network auto& network, const KeyID& keyID, BytesConstView signData,
-    const RequestID& requestID, const PrivateKeySlice& privateKeySlice, const PublicKey& publicKey, auto&&... args) {
+    const RequestID& requestID, const PrivateKeySlice& privateKeySlice, auto&&... args) {
     auto playerID = id(player);
     auto totalPlayers = players(player);
 
@@ -24,11 +24,19 @@ Signature tag_invoke(tag_t<sign> /*unused*/, auto& player, network::Network auto
     for (int i = 0; i < totalPlayers; ++i) {
         playerIDs.push_back(i);
     }
+    std::set<uint64_t> playerIDSet;
+    std::set<std::string> playersStr;
+    for (auto i = 0; i < totalPlayers; ++i) {
+        playerIDSet.insert(i);
+        playersStr.insert(std::to_string(i));
+    }
 
     PlatformImpl platform(playerID);
     KeyPersistencyImpl keyPersistency;
     auto algorithmType = toMPCAlgorithm(algorithm(player));
-    keyPersistency.store_key(keyID, algorithmType, privateKeySlice, 0);
+    elliptic_curve256_scalar_t mpcPrivateKeySlice;
+    std::ranges::copy(privateKeySlice, mpcPrivateKeySlice);
+    keyPersistency.store_key(keyID, algorithmType, mpcPrivateKeySlice, 0);
 
     PreprocessingPersistencyImpl preprocessingPersistency;
     fireblocks::common::cosigner::cmp_ecdsa_offline_signing_service signService(platform, keyPersistency, preprocessingPersistency);
@@ -36,7 +44,7 @@ Signature tag_invoke(tag_t<sign> /*unused*/, auto& player, network::Network auto
     // Step1: mta request
     std::map<uint64_t, std::vector<fireblocks::common::cosigner::cmp_mta_request>> mtaRequests;
     auto& mtaRequest = mtaRequests[playerID];
-    signService.start_ecdsa_signature_preprocessing(tenantID, keyID, requestID, 0, totalPlayers, totalPlayers, playerIDs, mtaRequest);
+    signService.start_ecdsa_signature_preprocessing(tenantID, keyID, requestID, 0, totalPlayers, totalPlayers, playerIDSet, mtaRequest);
     broadcastMessage(network, playerID, mtaRequest, totalPlayers);
     receiveAllMessage(network, playerID, mtaRequests, totalPlayers);
 
@@ -60,13 +68,6 @@ Signature tag_invoke(tag_t<sign> /*unused*/, auto& player, network::Network auto
     assert(gotKeyID == keyID);
 
     // Step4: signing
-    std::set<uint64_t> playerIDSet;
-    std::set<std::string> playersStr;
-    for (auto i = 0; i < totalPlayers; ++i) {
-        playerIDSet.insert(i);
-        playersStr.insert(std::to_string(i));
-    }
-
     const static std::vector<uint8_t> chaincode(32);
     fireblocks::common::cosigner::signing_data data{
         .chaincode = {},

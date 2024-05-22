@@ -14,18 +14,28 @@ void serialize(Archive& archive, fireblocks::common::cosigner::commitment& commi
 }
 
 template <class Archive>
+void serialize(Archive& archive, fireblocks::common::cosigner::elliptic_curve_point& point, unsigned int version) {
+    archive & point.data;
+}
+
+template <class Archive>
+void serialize(Archive& archive, fireblocks::common::cosigner::elliptic_curve_scalar& scalar, unsigned int version) {
+    archive & scalar.data;
+}
+
+template <class Archive>
 void serialize(Archive& archive, fireblocks::common::cosigner::setup_decommitment& decommitment, unsigned int version) {
     archive & decommitment.ack;
     archive & decommitment.seed;
-    archive & decommitment.share.X.data;
-    archive & decommitment.share.schnorr_R.data;
+    archive & decommitment.share.X;
+    archive & decommitment.share.schnorr_R;
     archive & decommitment.paillier_public_key;
     archive & decommitment.ring_pedersen_public_key;
 }
 
 template <class Archive>
 void serialize(Archive& archive, fireblocks::common::cosigner::setup_zk_proofs& setupZK, unsigned int version) {
-    archive & setupZK.schnorr_s.data;
+    archive & setupZK.schnorr_s;
     archive & setupZK.paillier_blum_zkp;
     archive & setupZK.ring_pedersen_param_zkp;
 }

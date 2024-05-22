@@ -25,9 +25,9 @@ constexpr inline struct CreateSecret {
 } createSecret{};
 
 constexpr inline struct Sign {
-    auto operator()(auto& player, network::Network auto& network, KeyID keyID, BytesConstView data, const PrivateKeySlice& privateKeySlice,
-        const PublicKey& publicKey, auto&&... args) const -> int {
-        return tag_invoke(*this, player, network, keyID, std::forward<decltype(args)>(args)...);
+    Signature operator()(auto& player, network::Network auto& network, const KeyID& keyID, BytesConstView signData, const RequestID& requestID,
+        const PrivateKeySlice& privateKeySlice, auto&&... args) const {
+        return tag_invoke(*this, player, network, keyID, signData, requestID, privateKeySlice, std::forward<decltype(args)>(args)...);
     }
 } sign{};
 
