@@ -1,13 +1,15 @@
 #pragma once
 
-#include "KeyPersistencyImpl.h"
 #include "NetworkImpl.h"
-#include "PlatformImpl.h"
 #include "PlayerImpl.h"
+#include "cosigner/cmp_ecdsa_offline_signing_service.h"
 #include "cosigner/cmp_setup_service.h"
+#include "cosigner/sign_algorithm.h"
+#include "crypto/elliptic_curve_algebra/elliptic_curve256_algebra.h"
 #include "player/Concepts.h"
 #include "player/Network.h"
 #include "player/Player.h"
+#include <openssl/rand.h>
 #include <boost/throw_exception.hpp>
 #include <memory>
 #include <stdexcept>
@@ -15,21 +17,8 @@
 
 namespace ppc::mpc::player {
 
-inline cosigner_sign_algorithm toMPCAlgorithm(AlgorithmType type) {
-    switch (type) {
-    case ECDSA_SECP256K1:
-        return cosigner_sign_algorithm::ECDSA_SECP256K1;
-    default:
-        break;
-    }
-    return cosigner_sign_algorithm::ECDSA_SECP256K1;
-}
-
-std::tuple<PrivateKeySlice, PublicKey> tag_invoke(
-    tag_t<createSecret> /*unused*/, PlayerImpl& player, network::Network auto& network, const KeyID& keyID, auto&&... args) {
-    std::tuple<PrivateKeySlice, PublicKey> result;
-    auto& [privateKeySlice, publicKey] = result;
-
+void tag_invoke(tag_t<sign> /*unused*/, auto& player, network::Network auto& network, const KeyID& keyID, BytesConstView data,
+    const PrivateKeySlice& privateKeySlice, const PublicKey& publicKey, auto&&... args) {
     auto playerID = id(player);
     auto totalPlayers = players(player);
     auto algorithmType = toMPCAlgorithm(algorithm(player));
@@ -42,7 +31,7 @@ std::tuple<PrivateKeySlice, PublicKey> tag_invoke(
 
     PlatformImpl platform(playerID);
     KeyPersistencyImpl persistency;
-    fireblocks::common::cosigner::cmp_setup_service setupService(platform, persistency);
+    fireblocks::common::cosigner::cmp_ecdsa_offline_signing_service signService(platform, persistency);
 
     // Step1: commitments
     std::map<uint64_t, fireblocks::common::cosigner::commitment> commitments;

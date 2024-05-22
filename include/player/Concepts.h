@@ -25,4 +25,6 @@ struct Signature {
 
 template <auto& Tag>
 using tag_t = std::decay_t<decltype(Tag)>;
+
+constexpr static std::string tenantID = "weco";
 }  // namespace ppc::mpc

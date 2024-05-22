@@ -6,8 +6,10 @@
 #include "player/Player.h"
 #include <openssl/rand.h>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
+#include <cstddef>
 #include <deque>
 #include <functional>
 #include <mutex>
@@ -93,34 +95,42 @@ auto catchError(int num, auto lambda) {
     };
 }
 
-BOOST_AUTO_TEST_CASE(create) {
-    ppc::mpc::player::PlayerImpl player1(0, ppc::mpc::ECDSA_SECP256K1, 3);
-    ppc::mpc::player::PlayerImpl player2(1, ppc::mpc::ECDSA_SECP256K1, 3);
-    ppc::mpc::player::PlayerImpl player3(2, ppc::mpc::ECDSA_SECP256K1, 3);
-
-    Router router;
-    MockNetwork mockNetwork1{.m_router = router, .m_playerID = 0};
-    MockNetwork mockNetwork2{.m_router = router, .m_playerID = 1};
-    MockNetwork mockNetwork3{.m_router = router, .m_playerID = 2};
+std::vector<std::tuple<ppc::mpc::PrivateKeySlice, ppc::mpc::PublicKey>> testCreate(int count) {
     std::string keyID{"MyID"};
 
-    ppc::mpc::PrivateKeySlice slice1{};
-    ppc::mpc::PrivateKeySlice slice2{};
-    ppc::mpc::PrivateKeySlice slice3{};
-    ppc::mpc::PublicKey publicKey1{};
-    ppc::mpc::PublicKey publicKey2{};
-    ppc::mpc::PublicKey publicKey3{};
+    std::vector<ppc::mpc::player::PlayerImpl> players;
+    players.reserve(count);
 
-    std::thread thread1(catchError(1, [&]() { std::tie(slice1, publicKey1) = ppc::mpc::player::createSecret(player1, mockNetwork1, keyID); }));
-    std::thread thread2(catchError(2, [&]() { std::tie(slice2, publicKey2) = ppc::mpc::player::createSecret(player2, mockNetwork2, keyID); }));
-    std::thread thread3(catchError(3, [&]() { std::tie(slice3, publicKey3) = ppc::mpc::player::createSecret(player3, mockNetwork3, keyID); }));
+    Router router;
+    std::vector<MockNetwork> networks;
+    networks.reserve(count);
+    std::vector<std::tuple<ppc::mpc::PrivateKeySlice, ppc::mpc::PublicKey>> results(count);
 
-    thread1.join();
-    thread2.join();
-    thread3.join();
+    std::vector<std::thread> threads;
+    threads.reserve(count);
 
-    BOOST_CHECK_NE(slice1, slice2);
-    BOOST_CHECK_NE(slice2, slice3);
+    for (auto i = 0; i < count; ++i) {
+        players.emplace_back(i, ppc::mpc::ECDSA_SECP256K1, count);
+        networks.emplace_back(MockNetwork{.m_router = router, .m_playerID = i});
+        threads.emplace_back(catchError(
+            i, [i, &results, &players, &networks, &keyID]() { results[i] = ppc::mpc::player::createSecret(players[i], networks[i], keyID); }));
+    }
+
+    for (auto i = 0; i < count; ++i) {
+        threads[i].join();
+    }
+
+    return results;
+}
+
+BOOST_AUTO_TEST_CASE(create) {
+    for (auto i = 3; i < 10; ++i) {
+        auto results = testCreate(i);
+        auto expectPublicKey = std::get<1>(results[0]);
+        for (auto& [privateKeySlice, publicKey] : results) {
+            BOOST_CHECK_EQUAL(expectPublicKey, publicKey);
+        }
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
