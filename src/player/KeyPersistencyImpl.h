@@ -1,37 +1,125 @@
 #pragma once
 #include "cosigner/cmp_key_persistency.h"
 #include "cosigner/cmp_setup_service.h"
+#include "cosigner/cosigner_exception.h"
+#include "player/Concepts.h"
+#include "player/Storage.h"
+#include <boost/throw_exception.hpp>
+#include <functional>
 #include <optional>
 
 namespace ppc::mpc::player {
 
+template <class Storage>
 class KeyPersistencyImpl : public fireblocks::common::cosigner::cmp_setup_service::setup_key_persistency {
-public:
-    bool key_exist(const std::string& key_id) const override;
-    void load_key(const std::string& key_id, cosigner_sign_algorithm& algorithm, elliptic_curve256_scalar_t& private_key) const override;
-    const std::string get_tenantid_from_keyid(const std::string& key_id) const override;
-    void load_key_metadata(const std::string& key_id, fireblocks::common::cosigner::cmp_key_metadata& metadata, bool full_load) const override;
-    void load_auxiliary_keys(const std::string& key_id, fireblocks::common::cosigner::auxiliary_keys& aux) const override;
-    void store_key(
-        const std::string& key_id, cosigner_sign_algorithm algorithm, const elliptic_curve256_scalar_t& private_key, uint64_t ttl = 0) override;
-    void store_key_metadata(const std::string& key_id, const fireblocks::common::cosigner::cmp_key_metadata& metadata, bool allow_override) override;
-    void store_auxiliary_keys(const std::string& key_id, const fireblocks::common::cosigner::auxiliary_keys& aux) override;
-    void store_keyid_tenant_id(const std::string& key_id, const std::string& tenant_id) override;
-    void store_setup_data(const std::string& key_id, const fireblocks::common::cosigner::setup_data& metadata) override;
-    void load_setup_data(const std::string& key_id, fireblocks::common::cosigner::setup_data& metadata) override;
-    void store_setup_commitments(const std::string& key_id, const std::map<uint64_t, fireblocks::common::cosigner::commitment>& commitments) override;
-    void load_setup_commitments(const std::string& key_id, std::map<uint64_t, fireblocks::common::cosigner::commitment>& commitments) override;
-    void delete_temporary_key_data(const std::string& key_id, bool delete_key = false) override;
+private:
+    std::reference_wrapper<Storage> m_storage;
 
-    struct KeyInfo {
-        cosigner_sign_algorithm algorithm;
-        elliptic_curve256_scalar_t private_key;
-        std::optional<fireblocks::common::cosigner::cmp_key_metadata> metadata;
-        fireblocks::common::cosigner::auxiliary_keys aux_keys;
+    enum FIELD {
+        ALGORITHM_FIELD,
+        PRIVATE_KEY_FIELD,
+        METADATA_FIELD,
+        AUX_KEYS,
+        TTL_FIELD,
+        SETUP_DATA,
+        COMMITMENT,
     };
 
-    std::map<std::string, KeyInfo> m_keys;
-    std::map<std::string, fireblocks::common::cosigner::setup_data> m_setup_data;
-    std::map<std::string, std::map<uint64_t, fireblocks::common::cosigner::commitment>> m_commitments;
+public:
+    explicit KeyPersistencyImpl(Storage& m_storage) : m_storage(std::move(m_storage)) {}
+
+    bool key_exist(const std::string& key_id) const override {
+        auto value = storage::read.operator()<cosigner_sign_algorithm>(m_storage.get(), std::tuple{key_id, ALGORITHM_FIELD});
+        return value.has_value();
+    }
+
+    void load_key(const std::string& key_id, cosigner_sign_algorithm& algorithm, elliptic_curve256_scalar_t& private_key) const override {
+        auto algorithmValue = storage::read.operator()<cosigner_sign_algorithm>(m_storage.get(), std::tuple{key_id, ALGORITHM_FIELD});
+        auto privateKeyValue = storage::read.operator()<elliptic_curve256_scalar_t>(m_storage.get(), std::tuple{key_id, PRIVATE_KEY_FIELD});
+        if (!algorithmValue || !privateKeyValue) {
+            BOOST_THROW_EXCEPTION(fireblocks::common::cosigner::cosigner_exception(fireblocks::common::cosigner::cosigner_exception::BAD_KEY));
+        }
+        algorithm = *algorithmValue;
+        private_key = *privateKeyValue;
+    }
+
+    const std::string get_tenantid_from_keyid(const std::string& key_id) const override { return ppc::mpc::tenantID; }
+
+    void load_key_metadata(const std::string& key_id, fireblocks::common::cosigner::cmp_key_metadata& metadata, bool full_load) const override {
+        auto metadataValue =
+            storage::read.operator()<fireblocks::common::cosigner::cmp_key_metadata>(m_storage.get(), std::tuple{key_id, METADATA_FIELD});
+        if (!metadataValue) {
+            BOOST_THROW_EXCEPTION(fireblocks::common::cosigner::cosigner_exception(fireblocks::common::cosigner::cosigner_exception::BAD_KEY));
+        }
+        metadata = *metadataValue;
+    }
+
+    void load_auxiliary_keys(const std::string& key_id, fireblocks::common::cosigner::auxiliary_keys& aux) const override {
+        auto auxValue = storage::read.operator()<fireblocks::common::cosigner::auxiliary_keys>(m_storage.get(), {key_id, AUX_KEYS});
+        if (!auxValue) {
+            BOOST_THROW_EXCEPTION(fireblocks::common::cosigner::cosigner_exception(fireblocks::common::cosigner::cosigner_exception::BAD_KEY));
+        }
+        aux = *auxValue;
+    }
+
+    void store_key(
+        const std::string& key_id, cosigner_sign_algorithm algorithm, const elliptic_curve256_scalar_t& private_key, uint64_t ttl = 0) override {
+        storage::write(m_storage.get(), std::tuple{key_id, ALGORITHM_FIELD}, algorithm);
+        storage::write(m_storage.get(), std::tuple{key_id, PRIVATE_KEY_FIELD}, private_key);
+        storage::write(m_storage.get(), std::tuple{key_id, TTL_FIELD}, ttl);
+    }
+
+    void store_key_metadata(const std::string& key_id, const fireblocks::common::cosigner::cmp_key_metadata& metadata, bool allow_override) override {
+        auto metadataValue =
+            storage::read.operator()<fireblocks::common::cosigner::cmp_key_metadata>(m_storage.get(), std::tuple{key_id, METADATA_FIELD});
+        if (metadataValue && !allow_override) {
+            BOOST_THROW_EXCEPTION(fireblocks::common::cosigner::cosigner_exception(fireblocks::common::cosigner::cosigner_exception::INTERNAL_ERROR));
+        }
+        storage::write(m_storage.get(), std::tuple{key_id, METADATA_FIELD}, metadata);
+    }
+
+    void store_auxiliary_keys(const std::string& key_id, const fireblocks::common::cosigner::auxiliary_keys& aux) override {
+        storage::write(m_storage.get(), std::tuple{key_id, AUX_KEYS}, aux);
+    }
+
+    void store_keyid_tenant_id(const std::string& key_id, const std::string& tenant_id) override {}
+
+    void store_setup_data(const std::string& key_id, const fireblocks::common::cosigner::setup_data& metadata) override {
+        storage::write(m_storage.get(), std::tuple{key_id, SETUP_DATA}, metadata);
+    }
+
+    void load_setup_data(const std::string& key_id, fireblocks::common::cosigner::setup_data& metadata) override {
+        auto metadataValue = storage::read.operator()<fireblocks::common::cosigner::setup_data>(m_storage.get(), std::tuple{key_id, SETUP_DATA});
+        if (!metadataValue) {
+            BOOST_THROW_EXCEPTION(fireblocks::common::cosigner::cosigner_exception(fireblocks::common::cosigner::cosigner_exception::BAD_KEY));
+        }
+        metadata = *metadataValue;
+    }
+
+    void store_setup_commitments(
+        const std::string& key_id, const std::map<uint64_t, fireblocks::common::cosigner::commitment>& commitments) override {
+        storage::write(m_storage.get(), std::tuple{key_id, COMMITMENT}, commitments);
+    }
+
+    void load_setup_commitments(const std::string& key_id, std::map<uint64_t, fireblocks::common::cosigner::commitment>& commitments) override {
+        auto commitmentsValue =
+            storage::read.operator()<std::map<uint64_t, fireblocks::common::cosigner::commitment>>(m_storage.get(), std::tuple{key_id, COMMITMENT});
+        if (!commitmentsValue) {
+            BOOST_THROW_EXCEPTION(fireblocks::common::cosigner::cosigner_exception(fireblocks::common::cosigner::cosigner_exception::BAD_KEY));
+        }
+        commitments = *commitmentsValue;
+    }
+
+    void delete_temporary_key_data(const std::string& key_id, bool delete_key = false) override {
+        storage::remove(m_storage.get(), std::tuple{key_id, COMMITMENT});
+        storage::remove(m_storage.get(), std::tuple{key_id, SETUP_DATA});
+        if (delete_key) {
+            storage::remove(m_storage.get(), std::tuple{key_id, ALGORITHM_FIELD});
+            storage::remove(m_storage.get(), std::tuple{key_id, PRIVATE_KEY_FIELD});
+            storage::remove(m_storage.get(), std::tuple{key_id, METADATA_FIELD});
+            storage::remove(m_storage.get(), std::tuple{key_id, AUX_KEYS});
+            storage::remove(m_storage.get(), std::tuple{key_id, TTL_FIELD});
+        }
+    }
 };
 }  // namespace ppc::mpc::player
