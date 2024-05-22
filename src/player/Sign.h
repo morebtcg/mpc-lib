@@ -1,82 +1,96 @@
 #pragma once
 
+#include "KeyPersistencyImpl.h"
 #include "NetworkImpl.h"
-#include "PlayerImpl.h"
+#include "PlatformImpl.h"
+#include "PreprocessingPersistencyImpl.h"
 #include "cosigner/cmp_ecdsa_offline_signing_service.h"
-#include "cosigner/cmp_setup_service.h"
-#include "cosigner/sign_algorithm.h"
-#include "crypto/elliptic_curve_algebra/elliptic_curve256_algebra.h"
 #include "player/Concepts.h"
 #include "player/Network.h"
 #include "player/Player.h"
 #include <openssl/rand.h>
 #include <boost/throw_exception.hpp>
-#include <memory>
-#include <stdexcept>
 #include <vector>
 
 namespace ppc::mpc::player {
 
-void tag_invoke(tag_t<sign> /*unused*/, auto& player, network::Network auto& network, const KeyID& keyID, BytesConstView data,
-    const PrivateKeySlice& privateKeySlice, const PublicKey& publicKey, auto&&... args) {
+Signature tag_invoke(tag_t<sign> /*unused*/, auto& player, network::Network auto& network, const KeyID& keyID, BytesConstView signData,
+    const RequestID& requestID, const PrivateKeySlice& privateKeySlice, const PublicKey& publicKey, auto&&... args) {
     auto playerID = id(player);
     auto totalPlayers = players(player);
-    auto algorithmType = toMPCAlgorithm(algorithm(player));
 
-    std::vector<uint64_t> playersIDs;
-    playersIDs.reserve(totalPlayers);
+    std::vector<uint64_t> playerIDs;
+    playerIDs.reserve(totalPlayers);
     for (int i = 0; i < totalPlayers; ++i) {
-        playersIDs.push_back(i);
+        playerIDs.push_back(i);
     }
 
     PlatformImpl platform(playerID);
-    KeyPersistencyImpl persistency;
-    fireblocks::common::cosigner::cmp_ecdsa_offline_signing_service signService(platform, persistency);
+    KeyPersistencyImpl keyPersistency;
+    auto algorithmType = toMPCAlgorithm(algorithm(player));
+    keyPersistency.store_key(keyID, algorithmType, privateKeySlice, 0);
 
-    // Step1: commitments
-    std::map<uint64_t, fireblocks::common::cosigner::commitment> commitments;
-    auto& commitment = commitments[playerID];
-    setupService.generate_setup_commitments(keyID, tenantID, algorithmType, playersIDs, playersIDs.size(), 0, {}, commitment);
-    broadcastMessage(network, playerID, commitment, totalPlayers);
-    receiveAllMessage(network, playerID, commitments, totalPlayers);
+    PreprocessingPersistencyImpl preprocessingPersistency;
+    fireblocks::common::cosigner::cmp_ecdsa_offline_signing_service signService(platform, keyPersistency, preprocessingPersistency);
 
-    // Step2: decommitments
-    std::map<uint64_t, fireblocks::common::cosigner::setup_decommitment> decommitments;
-    auto& decommitment = decommitments[playerID];
-    setupService.store_setup_commitments(keyID, commitments, decommitment);
-    broadcastMessage(network, playerID, decommitment, totalPlayers);
-    receiveAllMessage(network, playerID, decommitments, totalPlayers);
+    // Step1: mta request
+    std::map<uint64_t, std::vector<fireblocks::common::cosigner::cmp_mta_request>> mtaRequests;
+    auto& mtaRequest = mtaRequests[playerID];
+    signService.start_ecdsa_signature_preprocessing(tenantID, keyID, requestID, 0, totalPlayers, totalPlayers, playerIDs, mtaRequest);
+    broadcastMessage(network, playerID, mtaRequest, totalPlayers);
+    receiveAllMessage(network, playerID, mtaRequests, totalPlayers);
 
-    // Step3: proofs
-    std::map<uint64_t, fireblocks::common::cosigner::setup_zk_proofs> proofs;
-    auto& proof = proofs[playerID];
-    setupService.generate_setup_proofs(keyID, decommitments, proof);
-    broadcastMessage(network, playerID, proof, totalPlayers);
-    receiveAllMessage(network, playerID, proofs, totalPlayers);
+    // Step2: mta response
+    std::map<uint64_t, fireblocks::common::cosigner::cmp_mta_responses> mtaResponses;
+    auto& mtaResponse = mtaResponses[playerID];
+    signService.offline_mta_response(requestID, mtaRequests, mtaResponse);
+    broadcastMessage(network, playerID, mtaResponse, totalPlayers);
+    receiveAllMessage(network, playerID, mtaResponses, totalPlayers);
 
-    // Step4: verify proofs
-    std::map<uint64_t, std::map<uint64_t, std::vector<uint8_t>>> paillier_large_factor_proofs;
-    auto& paillierProof = paillier_large_factor_proofs[playerID];
-    setupService.verify_setup_proofs(keyID, proofs, paillierProof);
-    broadcastMessage(network, playerID, paillierProof, totalPlayers);
-    receiveAllMessage(network, playerID, paillier_large_factor_proofs, totalPlayers);
+    // Step3: delta
+    std::map<uint64_t, std::vector<fireblocks::common::cosigner::cmp_mta_deltas>> deltas;
+    auto& delta = deltas[playerID];
+    signService.offline_mta_verify(requestID, mtaResponses, delta);
+    broadcastMessage(network, playerID, delta, totalPlayers);
+    receiveAllMessage(network, playerID, deltas, totalPlayers);
 
-    // Last: create secret
-    std::string publicKeyStr;
-    setupService.create_secret(keyID, paillier_large_factor_proofs, publicKeyStr, algorithmType);
-    if (publicKeyStr.size() != sizeof(publicKey)) {
-        BOOST_THROW_EXCEPTION(std::runtime_error("Unmatch public key size!"));
+    // Store presigning data
+    std::string gotKeyID;
+    signService.store_presigning_data(requestID, deltas, gotKeyID);
+    assert(gotKeyID == keyID);
+
+    // Step4: signing
+    std::set<uint64_t> playerIDSet;
+    std::set<std::string> playersStr;
+    for (auto i = 0; i < totalPlayers; ++i) {
+        playerIDSet.insert(i);
+        playersStr.insert(std::to_string(i));
     }
-    assert(publicKeyStr.size() == publicKey.size());
-    std::uninitialized_copy(publicKeyStr.begin(), publicKeyStr.end(), publicKey.data());
 
-    elliptic_curve256_scalar_t privateKeyScalar;
-    cosigner_sign_algorithm privateKeyAlgorithm;
-    persistency.load_key(keyID, privateKeyAlgorithm, privateKeyScalar);
+    const static std::vector<uint8_t> chaincode(32);
+    fireblocks::common::cosigner::signing_data data{
+        .chaincode = {},
+    };
+    auto& block = data.blocks.emplace_back();
+    block.data.assign(signData.begin(), signData.end());
+    block.path = {44, 60, 0, 0, 0};  // Ethereum default wallet
 
-    assert(sizeof(privateKeyScalar) == privateKeySlice.size());
-    std::uninitialized_copy(privateKeyScalar, privateKeyScalar + sizeof(privateKeyScalar), privateKeySlice.data());
+    std::map<uint64_t, std::vector<fireblocks::common::cosigner::recoverable_signature>> partialSigs;
+    auto& partialSig = partialSigs[playerID];
+    signService.ecdsa_sign(keyID, requestID, data, "", playersStr, playerIDSet, 0, partialSig);
+    broadcastMessage(network, playerID, partialSig, totalPlayers);
+    receiveAllMessage(network, playerID, partialSigs, totalPlayers);
 
-    return result;
+    std::vector<fireblocks::common::cosigner::recoverable_signature> sigs;
+    signService.ecdsa_offline_signature(keyID, requestID, algorithmType, partialSigs, sigs);
+    assert(!sigs.empty());
+
+    auto& sig = sigs.front();
+    Signature signature;
+    std::ranges::copy(sig.r, signature.r.data());
+    std::ranges::copy(sig.s, signature.s.data());
+    signature.v = sig.v;
+
+    return signature;
 }
 }  // namespace ppc::mpc::player

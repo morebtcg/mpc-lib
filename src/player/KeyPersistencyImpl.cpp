@@ -1,5 +1,3 @@
-#pragma once
-
 #include "KeyPersistencyImpl.h"
 #include "cosigner/cosigner_exception.h"
 #include "player/Concepts.h"

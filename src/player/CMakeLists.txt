@@ -1,4 +1,4 @@
-add_library(player SHARED KeyPersistencyImpl.cpp PlatformImpl.cpp)
+add_library(player SHARED KeyPersistencyImpl.cpp PlatformImpl.cpp PreprocessingPersistencyImpl.cpp)
 
 find_package(boost_exception CONFIG REQUIRED)
 find_package(boost_serialization CONFIG REQUIRED)

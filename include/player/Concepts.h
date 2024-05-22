@@ -8,6 +8,7 @@ using BytesConstView = std::span<const uint8_t>;
 using BytesView = std::span<uint8_t>;
 using PlayerID = int;
 using KeyID = std::string;
+using RequestID = std::string;
 
 enum AlgorithmType { ECDSA_SECP256K1 };
 constexpr static int ELLIPTIC_CURVE_SCALAR_LENGTH = 32;
