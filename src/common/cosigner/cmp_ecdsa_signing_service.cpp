@@ -117,7 +117,7 @@ cmp_mta_deltas cmp_ecdsa_signing_service::mta_verify(ecdsa_signing_data& data, c
         const std::map<uint64_t, cmp_mta_responses>& mta_responses, size_t index, const auxiliary_keys& aux_keys, std::map<uint64_t, mta::response_verifier>& verifers)
 {
     for (auto it = mta_responses.begin(); it != mta_responses.end(); ++it)
-    {
+    {  
         if (it->first == my_id)
             continue;
         const auto& other = metadata.players_info.at(it->first);

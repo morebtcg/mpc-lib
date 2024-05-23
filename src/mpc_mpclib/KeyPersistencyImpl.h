@@ -14,18 +14,15 @@ class KeyPersistencyImpl : public fireblocks::common::cosigner::cmp_setup_servic
 private:
     std::reference_wrapper<Storage> m_storage;
 
-    enum FIELD {
-        ALGORITHM_FIELD,
-        PRIVATE_KEY_FIELD,
-        METADATA_FIELD,
-        AUX_KEYS,
-        TTL_FIELD,
-        SETUP_DATA,
-        COMMITMENT,
-    };
-
 public:
     explicit KeyPersistencyImpl(Storage& storage) : m_storage(storage) {}
+    constexpr static std::string_view ALGORITHM_FIELD = "algorithm_field";
+    constexpr static std::string_view PRIVATE_KEY_FIELD = "private_key_field";
+    constexpr static std::string_view METADATA_FIELD = "metadata_field";
+    constexpr static std::string_view AUX_KEYS = "aux_keys";
+    constexpr static std::string_view TTL_FIELD = "ttl_field";
+    constexpr static std::string_view SETUP_DATA = "setup_data";
+    constexpr static std::string_view COMMITMENT = "commitment";
 
     bool key_exist(const std::string& key_id) const override {
         auto value = storage::read.operator()<cosigner_sign_algorithm>(m_storage.get(), std::tuple{key_id, ALGORITHM_FIELD});
@@ -71,7 +68,7 @@ public:
     void store_key_metadata(const std::string& key_id, const fireblocks::common::cosigner::cmp_key_metadata& metadata, bool allow_override) override {
         auto metadataValue =
             storage::read.operator()<fireblocks::common::cosigner::cmp_key_metadata>(m_storage.get(), std::tuple{key_id, METADATA_FIELD});
-        if (metadataValue && !allow_override) {
+        if (!allow_override && metadataValue) {
             BOOST_THROW_EXCEPTION(fireblocks::common::cosigner::cosigner_exception(fireblocks::common::cosigner::cosigner_exception::INTERNAL_ERROR));
         }
         storage::write(m_storage.get(), std::tuple{key_id, METADATA_FIELD}, metadata);

@@ -1,11 +1,11 @@
 #pragma once
 
-#include <optional>
+#include <utility>
 namespace ppc::mpc::storage {
 
 constexpr inline struct Read {
     template <class T>
-    std::optional<T> operator()(auto& storage, auto&& key) const {
+    auto operator()(auto& storage, auto&& key) const {
         return tag_invoke<T>(*this, storage, std::forward<decltype(key)>(key));
     }
 } read{};

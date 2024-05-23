@@ -19,11 +19,6 @@ Signature tag_invoke(tag_t<sign> /*unused*/, auto& player, auto& storage, networ
     auto playerID = id(player);
     auto totalPlayers = players(player);
 
-    std::vector<uint64_t> playerIDs;
-    playerIDs.reserve(totalPlayers);
-    for (int i = 0; i < totalPlayers; ++i) {
-        playerIDs.push_back(i);
-    }
     std::set<uint64_t> playerIDSet;
     std::set<std::string> playersStr;
     for (auto i = 0; i < totalPlayers; ++i) {
@@ -33,12 +28,9 @@ Signature tag_invoke(tag_t<sign> /*unused*/, auto& player, auto& storage, networ
 
     PlatformImpl platform(playerID);
     KeyPersistencyImpl keyPersistency(storage);
-    auto algorithmType = toMPCAlgorithm(algorithm(player));
-    // elliptic_curve256_scalar_t mpcPrivateKeySlice;
-    // std::ranges::copy(privateKeySlice, mpcPrivateKeySlice);
-    // keyPersistency.store_key(keyID, algorithmType, mpcPrivateKeySlice, 0);
-
     PreprocessingPersistencyImpl preprocessingPersistency(storage);
+    auto algorithmType = toMPCAlgorithm(algorithm(player));
+
     fireblocks::common::cosigner::cmp_ecdsa_offline_signing_service signService(platform, keyPersistency, preprocessingPersistency);
 
     // Step1: mta request

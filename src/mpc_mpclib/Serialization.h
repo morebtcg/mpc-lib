@@ -3,6 +3,7 @@
 #include "cosigner/cmp_ecdsa_signing_service.h"
 #include "cosigner/cmp_setup_service.h"
 #include "cosigner/types.h"
+#include <boost/serialization/string.hpp>
 
 namespace boost::serialization {
 

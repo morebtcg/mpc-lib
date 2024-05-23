@@ -15,12 +15,10 @@ class PreprocessingPersistencyImpl : public fireblocks::common::cosigner::cmp_ec
 private:
     std::reference_wrapper<Storage> m_storage;
 
-    enum FIELD {
-        PREPROCESSING_METADATA,
-        PREPROCESSING_DATA,
-        PREPROCESSED_DATA,
-        PREPROCESSED_COUNT,
-    };
+    constexpr static std::string_view PREPROCESSING_METADATA = "preprocessing_metadata";
+    constexpr static std::string_view PREPROCESSING_DATA = "preprocessing_data";
+    constexpr static std::string_view PREPROCESSED_DATA = "preprocessed_data";
+    constexpr static std::string_view PREPROCESSED_COUNT = "preprocessed_count";
 
 public:
     explicit PreprocessingPersistencyImpl(Storage& storage) : m_storage(storage) {}
