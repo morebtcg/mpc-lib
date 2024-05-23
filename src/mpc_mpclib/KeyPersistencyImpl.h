@@ -2,11 +2,10 @@
 #include "cosigner/cmp_key_persistency.h"
 #include "cosigner/cmp_setup_service.h"
 #include "cosigner/cosigner_exception.h"
-#include "player/Concepts.h"
-#include "player/Storage.h"
+#include "mpc/Concepts.h"
+#include "mpc/Storage.h"
 #include <boost/throw_exception.hpp>
 #include <functional>
-#include <optional>
 
 namespace ppc::mpc::player {
 
@@ -26,7 +25,7 @@ private:
     };
 
 public:
-    explicit KeyPersistencyImpl(Storage& m_storage) : m_storage(std::move(m_storage)) {}
+    explicit KeyPersistencyImpl(Storage& storage) : m_storage(storage) {}
 
     bool key_exist(const std::string& key_id) const override {
         auto value = storage::read.operator()<cosigner_sign_algorithm>(m_storage.get(), std::tuple{key_id, ALGORITHM_FIELD});
@@ -40,7 +39,7 @@ public:
             BOOST_THROW_EXCEPTION(fireblocks::common::cosigner::cosigner_exception(fireblocks::common::cosigner::cosigner_exception::BAD_KEY));
         }
         algorithm = *algorithmValue;
-        private_key = *privateKeyValue;
+        std::ranges::copy(*privateKeyValue, private_key);
     }
 
     const std::string get_tenantid_from_keyid(const std::string& key_id) const override { return ppc::mpc::tenantID; }
@@ -55,7 +54,7 @@ public:
     }
 
     void load_auxiliary_keys(const std::string& key_id, fireblocks::common::cosigner::auxiliary_keys& aux) const override {
-        auto auxValue = storage::read.operator()<fireblocks::common::cosigner::auxiliary_keys>(m_storage.get(), {key_id, AUX_KEYS});
+        auto auxValue = storage::read.operator()<fireblocks::common::cosigner::auxiliary_keys>(m_storage.get(), std::tuple{key_id, AUX_KEYS});
         if (!auxValue) {
             BOOST_THROW_EXCEPTION(fireblocks::common::cosigner::cosigner_exception(fireblocks::common::cosigner::cosigner_exception::BAD_KEY));
         }

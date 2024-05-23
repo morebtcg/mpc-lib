@@ -1,6 +1,6 @@
 #pragma once
-#include "player/Concepts.h"
-#include "player/Player.h"
+#include "mpc/Concepts.h"
+#include "mpc/Player.h"
 
 namespace ppc::mpc::player {
 

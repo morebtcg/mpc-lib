@@ -11,7 +11,7 @@ if(NOT TARGET OpenSSL::Crypto)
 endif()
 
 add_subdirectory(src/common)
-add_subdirectory(src/player)
+add_subdirectory(src/mpc_mpclib)
 
 if(${CMAKE_SOURCE_DIR} STREQUAL ${PROJECT_SOURCE_DIR} AND NOT MPC_LIB_SKIP_TESTS)
     enable_testing()

@@ -2,17 +2,20 @@
 #include "Dump.h"
 #include "PlayerImpl.h"
 #include "Sign.h"
-#include "player/Concepts.h"
-#include "player/Network.h"
-#include "player/Player.h"
+#include "mpc/Concepts.h"
+#include "mpc/Network.h"
+#include "mpc/Player.h"
 #include <openssl/rand.h>
+#include <boost/archive/text_iarchive.hpp>
+#include <boost/archive/text_oarchive.hpp>
 #include <boost/exception/diagnostic_information.hpp>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
+#include <any>
 #include <deque>
 #include <functional>
 #include <mutex>
+#include <sstream>
 #include <thread>
 
 class TestCreateSecretFixture {};
@@ -58,6 +61,34 @@ struct MockNetwork {
     }
 };
 
+struct MockStorage {
+    std::map<std::string, std::any, std::less<>> m_storage;
+};
+
+std::string toKey(auto&& key) {
+    std::stringstream ss;
+    boost::archive::text_oarchive archive(ss);
+    archive << std::forward<decltype(key)>(key);
+    return ss.str();
+}
+
+template <class T>
+std::optional<T> tag_invoke(ppc::mpc::tag_t<ppc::mpc::storage::read> /*unused*/, MockStorage& storage, auto&& key) {
+    auto it = storage.m_storage.find(toKey(key));
+    if (it == storage.m_storage.end()) {
+        return std::nullopt;
+    }
+    return std::any_cast<T>(it->second);
+}
+
+void tag_invoke(ppc::mpc::tag_t<ppc::mpc::storage::write> /*unused*/, MockStorage& storage, auto&& key, auto&& value) {
+    storage.m_storage[toKey(key)] = std::forward<decltype(value)>(value);
+}
+
+void tag_invoke(ppc::mpc::tag_t<ppc::mpc::storage::remove> /*unused*/, MockStorage& storage, auto&& key) {
+    storage.m_storage.erase(toKey(key));
+}
+
 BOOST_AUTO_TEST_CASE(serialize) {
     fireblocks::common::cosigner::setup_decommitment decommitment;
     RAND_bytes(decommitment.ack, sizeof(decommitment.ack));
@@ -97,7 +128,7 @@ auto catchError(int num, auto lambda) {
 
 constexpr static std::string keyID{"MyID"};
 
-std::vector<std::tuple<ppc::mpc::PrivateKeySlice, ppc::mpc::PublicKey>> testCreate(int count) {
+std::vector<std::tuple<ppc::mpc::PrivateKeySlice, ppc::mpc::PublicKey>> testCreate(int count, MockStorage& mockStorage) {
     std::vector<ppc::mpc::player::PlayerImpl> players;
     players.reserve(count);
 
@@ -112,8 +143,9 @@ std::vector<std::tuple<ppc::mpc::PrivateKeySlice, ppc::mpc::PublicKey>> testCrea
     for (auto i = 0; i < count; ++i) {
         players.emplace_back(i, ppc::mpc::ECDSA_SECP256K1, count);
         networks.emplace_back(MockNetwork{.m_router = router, .m_playerID = i});
-        threads.emplace_back(
-            catchError(i, [i, &results, &players, &networks]() { results[i] = ppc::mpc::player::createSecret(players[i], networks[i], keyID); }));
+        threads.emplace_back(catchError(i, [i, &results, &players, &networks, &mockStorage]() {
+            results[i] = ppc::mpc::player::createSecret(players[i], mockStorage, networks[i], keyID);
+        }));
     }
 
     for (auto i = 0; i < count; ++i) {
@@ -123,8 +155,8 @@ std::vector<std::tuple<ppc::mpc::PrivateKeySlice, ppc::mpc::PublicKey>> testCrea
     return results;
 }
 
-std::vector<ppc::mpc::Signature> testSign(int count, ppc::mpc::BytesConstView signData) {
-    auto keys = testCreate(count);
+std::vector<ppc::mpc::Signature> testSign(int count, ppc::mpc::BytesConstView signData, MockStorage& mockStorage) {
+    auto keys = testCreate(count, mockStorage);
 
     std::vector<ppc::mpc::player::PlayerImpl> players;
     players.reserve(count);
@@ -139,8 +171,8 @@ std::vector<ppc::mpc::Signature> testSign(int count, ppc::mpc::BytesConstView si
     for (auto i = 0; i < count; ++i) {
         players.emplace_back(i, ppc::mpc::ECDSA_SECP256K1, count);
         networks.emplace_back(MockNetwork{.m_router = router, .m_playerID = i});
-        threads.emplace_back(catchError(i, [i, &keys, &players, &networks, &signData, &signatures]() {
-            signatures[i] = ppc::mpc::player::sign(players[i], networks[i], keyID, signData, requestID, std::get<0>(keys[i]));
+        threads.emplace_back(catchError(i, [i, &keys, &players, &networks, &signData, &signatures, &mockStorage]() {
+            signatures[i] = ppc::mpc::player::sign(players[i], mockStorage, networks[i], keyID, signData, requestID, std::get<0>(keys[i]));
         }));
     }
 
@@ -149,7 +181,8 @@ std::vector<ppc::mpc::Signature> testSign(int count, ppc::mpc::BytesConstView si
 
 BOOST_AUTO_TEST_CASE(create) {
     for (auto i = 3; i < 10; ++i) {
-        auto results = testCreate(i);
+        MockStorage storage;
+        auto results = testCreate(i, storage);
         auto expectPublicKey = std::get<1>(results[0]);
         for (auto& [privateKeySlice, publicKey] : results) {
             BOOST_CHECK_EQUAL(expectPublicKey, publicKey);
@@ -159,8 +192,9 @@ BOOST_AUTO_TEST_CASE(create) {
 
 BOOST_AUTO_TEST_CASE(sign) {
     for (auto i = 3; i < 10; ++i) {
+        MockStorage storage;
         auto signData = "To be sign! " + std::to_string(i);
-        auto results = testSign(i, ppc::mpc::BytesConstView((const uint8_t*)signData.data(), signData.size()));
+        auto results = testSign(i, ppc::mpc::BytesConstView((const uint8_t*)signData.data(), signData.size()), storage);
     }
 }
 

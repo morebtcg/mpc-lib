@@ -5,17 +5,17 @@
 #include "PlatformImpl.h"
 #include "PreprocessingPersistencyImpl.h"
 #include "cosigner/cmp_ecdsa_offline_signing_service.h"
-#include "player/Concepts.h"
-#include "player/Network.h"
-#include "player/Player.h"
+#include "mpc/Concepts.h"
+#include "mpc/Network.h"
+#include "mpc/Player.h"
 #include <openssl/rand.h>
 #include <boost/throw_exception.hpp>
 #include <vector>
 
 namespace ppc::mpc::player {
 
-Signature tag_invoke(tag_t<sign> /*unused*/, auto& player, network::Network auto& network, const KeyID& keyID, BytesConstView signData,
-    const RequestID& requestID, const PrivateKeySlice& privateKeySlice, auto&&... args) {
+Signature tag_invoke(tag_t<sign> /*unused*/, auto& player, auto& storage, network::Network auto& network, const KeyID& keyID, BytesConstView signData,
+    const RequestID& requestID, const PrivateKeySlice& privateKeySlice) {
     auto playerID = id(player);
     auto totalPlayers = players(player);
 
@@ -32,13 +32,13 @@ Signature tag_invoke(tag_t<sign> /*unused*/, auto& player, network::Network auto
     }
 
     PlatformImpl platform(playerID);
-    KeyPersistencyImpl keyPersistency;
+    KeyPersistencyImpl keyPersistency(storage);
     auto algorithmType = toMPCAlgorithm(algorithm(player));
-    elliptic_curve256_scalar_t mpcPrivateKeySlice;
-    std::ranges::copy(privateKeySlice, mpcPrivateKeySlice);
-    keyPersistency.store_key(keyID, algorithmType, mpcPrivateKeySlice, 0);
+    // elliptic_curve256_scalar_t mpcPrivateKeySlice;
+    // std::ranges::copy(privateKeySlice, mpcPrivateKeySlice);
+    // keyPersistency.store_key(keyID, algorithmType, mpcPrivateKeySlice, 0);
 
-    PreprocessingPersistencyImpl preprocessingPersistency;
+    PreprocessingPersistencyImpl preprocessingPersistency(storage);
     fireblocks::common::cosigner::cmp_ecdsa_offline_signing_service signService(platform, keyPersistency, preprocessingPersistency);
 
     // Step1: mta request

@@ -5,9 +5,9 @@
 #include "PlatformImpl.h"
 #include "PlayerImpl.h"
 #include "cosigner/cmp_setup_service.h"
-#include "player/Concepts.h"
-#include "player/Network.h"
-#include "player/Player.h"
+#include "mpc/Concepts.h"
+#include "mpc/Network.h"
+#include "mpc/Player.h"
 #include <boost/throw_exception.hpp>
 #include <memory>
 #include <stdexcept>
@@ -26,7 +26,7 @@ inline cosigner_sign_algorithm toMPCAlgorithm(AlgorithmType type) {
 }
 
 std::tuple<PrivateKeySlice, PublicKey> tag_invoke(
-    tag_t<createSecret> /*unused*/, PlayerImpl& player, network::Network auto& network, const KeyID& keyID, auto&&... args) {
+    tag_t<createSecret> /*unused*/, PlayerImpl& player, auto& storage, network::Network auto& network, const KeyID& keyID, auto&&... args) {
     std::tuple<PrivateKeySlice, PublicKey> result;
     auto& [privateKeySlice, publicKey] = result;
 
@@ -41,7 +41,7 @@ std::tuple<PrivateKeySlice, PublicKey> tag_invoke(
     }
 
     PlatformImpl platform(playerID);
-    KeyPersistencyImpl persistency;
+    KeyPersistencyImpl persistency(storage);
     fireblocks::common::cosigner::cmp_setup_service setupService(platform, persistency);
 
     // Step1: commitments
