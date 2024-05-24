@@ -90,17 +90,9 @@ struct MockStorage {
 std::string serialize(auto&& object) {
     std::stringstream ss;
     boost::archive::text_oarchive archive(ss);
-
-    using ObjectType = std::decay_t<decltype(object)>;
-    if constexpr (std::is_array_v<ObjectType>) {
-        std::array<std::ranges::range_value_t<ObjectType>, sizeof(ObjectType)> arr;
-        std::ranges::uninitialized_copy(object, arr.begin());
-        archive << arr;
-        return ss.str();
-    } else {
-        archive << std::forward<decltype(object)>(object);
-        return ss.str();
-    }
+    archive << std::forward<decltype(object)>(object);
+    ss.flush();
+    return ss.str();
 }
 
 template <class T>
@@ -250,6 +242,17 @@ std::vector<ppc::mpc::Signature> testSign(int count, ppc::mpc::BytesConstView si
     return signatures;
 }
 
+BOOST_AUTO_TEST_CASE(key_serialize) {
+    using namespace std::string_literals;
+    using namespace std::string_view_literals;
+    auto key1 = serialize(std::tuple{"key1"s, "key2"sv, 100LU});
+    auto key2 = serialize(std::tuple{"key1"s, "key2"sv, 200LU});
+
+    std::cout << key1 << "\n";
+    std::cout << key2 << "\n";
+    BOOST_CHECK_NE(key1, key2);
+}
+
 BOOST_AUTO_TEST_CASE(create) {
     for (auto i = 3; i < 10; ++i) {
         auto results = testCreate(i);
@@ -262,7 +265,7 @@ BOOST_AUTO_TEST_CASE(create) {
 
 BOOST_AUTO_TEST_CASE(sign) {
     for (auto i = 3; i < 10; ++i) {
-        auto signData = "To be sign! " + std::to_string(i);
+        auto signData = std::string(32, '0');
         auto results = testSign(i, ppc::mpc::BytesConstView((const uint8_t*)signData.data(), signData.size()));
     }
 }

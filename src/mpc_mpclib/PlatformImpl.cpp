@@ -40,7 +40,9 @@ void ppc::mpc::player::PlatformImpl::start_signing(const std::string& key_id, co
     const fireblocks::common::cosigner::signing_data& data, const std::string& metadata_json, const std::set<std::string>& players) {}
 
 void ppc::mpc::player::PlatformImpl::fill_signing_info_from_metadata(const std::string& metadata, std::vector<uint32_t>& flags) const {
-    assert(0);
+    for (auto& i : flags) {
+        i = 0;
+    }
 }
 
 bool ppc::mpc::player::PlatformImpl::is_client_id(uint64_t player_id) const {

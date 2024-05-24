@@ -39,13 +39,13 @@ public:
 
     void store_preprocessing_data(
         const std::string& request_id, uint64_t index, const fireblocks::common::cosigner::ecdsa_signing_data& data) override {
-        storage::write(m_storage.get(), std::tuple{request_id, PREPROCESSING_DATA}, data);
+        storage::write(m_storage.get(), std::tuple{request_id, PREPROCESSING_DATA, index}, data);
     }
 
     void load_preprocessing_data(
         const std::string& request_id, uint64_t index, fireblocks::common::cosigner::ecdsa_signing_data& data) const override {
-        auto dataValue =
-            storage::read.operator()<fireblocks::common::cosigner::ecdsa_signing_data>(m_storage.get(), std::tuple{request_id, PREPROCESSING_DATA});
+        auto dataValue = storage::read.operator()<fireblocks::common::cosigner::ecdsa_signing_data>(
+            m_storage.get(), std::tuple{request_id, PREPROCESSING_DATA, index});
         if (!dataValue) {
             BOOST_THROW_EXCEPTION(fireblocks::common::cosigner::cosigner_exception(fireblocks::common::cosigner::cosigner_exception::BAD_KEY));
         }
